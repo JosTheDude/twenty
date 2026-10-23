@@ -2,6 +2,12 @@
 
 All notable changes to Twenty are documented here. This project uses [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+- Sound when the heads-up pill appears, configurable in Settings
+- Notification alongside the heads-up pill
+- Breaks no longer run, or count toward your streak, while the screen is off or nobody has touched the keyboard or mouse all interval
+
 ## [1.0.0] - 2026-10-23
 
 First public release.

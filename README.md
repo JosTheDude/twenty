@@ -18,10 +18,10 @@ Every 20 minutes, look at something 20 feet away for 20 seconds.</p>
 ## Features
 
 - **Gentle full-screen breaks.** A blurred overlay covers every display with a countdown ring. Press <kbd>Esc</kbd> to skip.
-- **Heads-up before a break.** A small pill appears under the menu bar shortly before a break. It never takes focus or blocks clicks.
+- **Heads-up before a break.** A small pill appears under the menu bar shortly before a break. It never takes focus or blocks clicks, and plays a soft sound and posts a notification so you notice it.
 - **Holds breaks during calls.** If your camera or microphone is in use, the break waits until you're done. No permissions needed: Twenty only checks whether a device is busy and never reads audio or video.
 - **Streaks.** Each break you finish adds one to your streak. Skipping a break resets it.
-- **Smart reset.** After your screen wakes from sleep, the timer starts a fresh interval.
+- **Smart reset.** No breaks while your screen is off or nobody has touched the keyboard or mouse all interval, so streaks only count real breaks. After your screen wakes, the timer starts a fresh interval.
 - **Lightweight.** No dependencies, no Dock icon, no network access. It uses one-shot timers, so it does nothing between breaks.
 - **Manageable.** Every setting can be set or locked with a configuration profile.
 
@@ -46,6 +46,7 @@ Open the menu bar icon and choose **Settings…**
 | Break every | `workMinutes` | 20 min | 5–120 min |
 | Break length | `breakSeconds` | 20 sec | 10–300 sec |
 | Heads-up | `warnSeconds` | 60 (1 minute before) | 0 (off), 15, 30, 60, 120 |
+| Heads-up sound | `warnSound` | Tink | Any system sound name, or empty for none |
 | Chime when a break ends | `chime` | On | |
 | Hold breaks during calls | `holdInCalls` | On | |
 | Open at login | | Off | |

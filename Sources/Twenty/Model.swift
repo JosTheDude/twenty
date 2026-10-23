@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 // One-shot timers only, so the app does nothing between breaks.
 @MainActor
@@ -8,6 +9,7 @@ final class Model: ObservableObject {
     @Published private(set) var paused = false
     @Published private(set) var waiting = false // break is due, but you're in a call
     private var pausedLeft: TimeInterval = 0
+    private var intervalStart = Date()
     private var timer: Timer?
     private var warnTimer: Timer?
     private var overlays: [NSWindow] = []
@@ -16,8 +18,18 @@ final class Model: ObservableObject {
     private let defaults = UserDefaults.standard
 
     init() {
-        defaults.register(defaults: [Key.work: 20.0, Key.rest: 20.0, Key.warn: 60.0, Key.chime: true, Key.holdInCalls: true])
+        defaults.register(defaults: [Key.work: 20.0, Key.rest: 20.0, Key.warn: 60.0, Key.warnSound: "Tink", Key.chime: true, Key.holdInCalls: true])
         restart()
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
+        // Screen off: nobody is looking, so no break runs and none counts toward the streak.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.closeBreak()
+                self?.stopTimers()
+            }
+        }
         // Screen was off, eyes were rested: start a fresh interval.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main
@@ -73,9 +85,16 @@ final class Model: ObservableObject {
         restart()
     }
 
+    // No keyboard or mouse input all interval, so there's nothing to rest from.
+    private var away: Bool {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
+            >= -intervalStart.timeIntervalSinceNow
+    }
+
     private var holding: Bool { defaults.bool(forKey: Key.holdInCalls) && (cameraInUse() || micInUse()) }
 
     private func breakDue() {
+        if away { return restart() }
         guard holding else { return startBreak() }
         hideWarning()
         waiting = true
@@ -84,6 +103,7 @@ final class Model: ObservableObject {
 
     private func schedule(in seconds: TimeInterval) {
         stopTimers()
+        intervalStart = Date()
         nextBreak = Date().addingTimeInterval(seconds)
         timer = fire(after: seconds) { $0.breakDue() }
         let warn = defaults.double(forKey: Key.warn)
@@ -145,7 +165,7 @@ final class Model: ObservableObject {
 
     // A small pill under the menu bar that never takes focus or clicks.
     private func showWarning() {
-        guard warning == nil, !holding, let screen = NSScreen.main else { return }
+        guard warning == nil, !holding, !away, let screen = NSScreen.main else { return }
         let size = NSSize(width: 184, height: 34), f = screen.visibleFrame
         let p = NSPanel(contentRect: NSRect(x: f.midX - size.width / 2, y: f.maxY - size.height - 10, width: size.width, height: size.height),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -169,11 +189,17 @@ final class Model: ObservableObject {
         p.alphaValue = 0
         p.orderFrontRegardless()
         warning = p
+        defaults.string(forKey: Key.warnSound).flatMap { NSSound(named: $0) }?.play()
+        let note = UNMutableNotificationContent() // silent: the heads-up sound above covers it
+        note.title = "Eye break in \(clock(nextBreak.timeIntervalSinceNow))"
+        note.body = "Get ready to look away for a moment."
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "heads-up", content: note, trigger: nil))
         fade([p], in: true)
     }
 
     private func hideWarning() {
         guard let w = warning else { return }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["heads-up"])
         fade([w], in: false)
         warning = nil
     }

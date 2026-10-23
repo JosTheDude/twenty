@@ -102,6 +102,7 @@ struct SettingsView: View {
     @AppStorage(Key.work) private var work = 20.0
     @AppStorage(Key.rest) private var rest = 20.0
     @AppStorage(Key.warn) private var warn = 60.0
+    @AppStorage(Key.warnSound) private var warnSound = "Tink"
     @AppStorage(Key.chime) private var chime = true
     @AppStorage(Key.holdInCalls) private var holdInCalls = true
     @AppStorage(Key.streak) private var streak = 0
@@ -130,6 +131,12 @@ struct SettingsView: View {
                     Text("2 minutes before").tag(120.0)
                 }
                 .disabled(managed(Key.warn))
+                Picker("Heads-up sound", selection: $warnSound) {
+                    Text("None").tag("")
+                    ForEach(["Tink", "Pop", "Ping", "Purr", "Glass", "Hero"], id: \.self) { Text($0).tag($0) }
+                }
+                .disabled(managed(Key.warnSound) || warn == 0)
+                .onChange(of: warnSound) { NSSound(named: warnSound)?.play() }
                 Toggle("Chime when a break ends", isOn: $chime)
                     .disabled(managed(Key.chime))
             }

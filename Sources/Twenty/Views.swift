@@ -108,14 +108,19 @@ struct SettingsView: View {
     @AppStorage(Key.best) private var best = 0
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
 
+    // Set by a configuration profile, so edits here would be ignored.
+    private func managed(_ key: String) -> Bool { UserDefaults.standard.objectIsForced(forKey: key) }
+
     var body: some View {
         Form {
             Section {
                 LabeledContent("Break every") {
                     Stepper(value: $work, in: 5...120, step: 5) { Text("\(Int(work)) min").monospacedDigit() }
+                        .disabled(managed(Key.work))
                 }
                 LabeledContent("Break length") {
                     Stepper(value: $rest, in: 10...300, step: 5) { Text("\(Int(rest)) sec").monospacedDigit() }
+                        .disabled(managed(Key.rest))
                 }
                 Picker("Heads-up", selection: $warn) {
                     Text("Off").tag(0.0)
@@ -124,11 +129,14 @@ struct SettingsView: View {
                     Text("1 minute before").tag(60.0)
                     Text("2 minutes before").tag(120.0)
                 }
+                .disabled(managed(Key.warn))
                 Toggle("Chime when a break ends", isOn: $chime)
+                    .disabled(managed(Key.chime))
             }
 
             Section {
                 Toggle("Hold breaks during calls", isOn: $holdInCalls)
+                    .disabled(managed(Key.holdInCalls))
             } footer: {
                 Text("Waits while your camera or microphone is in use, then takes the break once you're done.")
                     .foregroundStyle(.secondary)

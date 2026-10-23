@@ -2,11 +2,12 @@
 
 All notable changes to Twenty are documented here. This project uses [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [1.1.0] - 2026-10-23
 
 - Sound when the heads-up pill appears, configurable in Settings
 - Notification alongside the heads-up pill
 - Breaks no longer run, or count toward your streak, while the screen is off or nobody has touched the keyboard or mouse all interval
+- Settings locked by a configuration profile are greyed out in Settings
 
 ## [1.0.0] - 2026-10-23
 
@@ -20,4 +21,5 @@ First public release.
 - Settings manageable through configuration profiles
 - Universal binary for Apple silicon and Intel
 
+[1.1.0]: https://github.com/JosTheDude/twenty/releases/tag/v1.1.0
 [1.0.0]: https://github.com/JosTheDude/twenty/releases/tag/v1.0.0

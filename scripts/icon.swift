@@ -1,4 +1,4 @@
-// Draws the app icon. Regenerate AppIcon.icns with: swift icon.swift
+// Draws the app icon. Regenerate Resources/AppIcon.icns with: swift scripts/icon.swift
 import AppKit
 
 // The mark: an eye whose iris is a timer ring two-thirds of the way round. Unit square, y up.
@@ -79,6 +79,6 @@ for pt in [16, 32, 128, 256, 512] {
 }
 let iconutil = Process()
 iconutil.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
-iconutil.arguments = ["-c", "icns", set.path, "-o", dir.appendingPathComponent("AppIcon.icns").path]
+iconutil.arguments = ["-c", "icns", set.path, "-o", dir.deletingLastPathComponent().appendingPathComponent("Resources/AppIcon.icns").path]
 try iconutil.run()
 iconutil.waitUntilExit()

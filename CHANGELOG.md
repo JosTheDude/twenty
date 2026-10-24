@@ -33,5 +33,7 @@ First public release.
 - Settings manageable through configuration profiles
 - Universal binary for Apple silicon and Intel
 
+[1.3.0]: https://github.com/JosTheDude/twenty/releases/tag/v1.3.0
+[1.2.0]: https://github.com/JosTheDude/twenty/releases/tag/v1.2.0
 [1.1.0]: https://github.com/JosTheDude/twenty/releases/tag/v1.1.0
 [1.0.0]: https://github.com/JosTheDude/twenty/releases/tag/v1.0.0

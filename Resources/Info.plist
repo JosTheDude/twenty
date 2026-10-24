@@ -7,8 +7,8 @@
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundleIdentifier</key><string>io.github.josthedude.Twenty</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>1.1.0</string>
-	<key>CFBundleVersion</key><string>2</string>
+	<key>CFBundleShortVersionString</key><string>1.3.0</string>
+	<key>CFBundleVersion</key><string>4</string>
 	<key>LSMinimumSystemVersion</key><string>14.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHumanReadableCopyright</key><string>Copyright © 2026 JosTheDude. MIT License.</string>

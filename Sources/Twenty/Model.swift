@@ -12,13 +12,18 @@ final class Model: ObservableObject {
     private var intervalStart = Date()
     private var timer: Timer?
     private var warnTimer: Timer?
+    private var glowTimer: Timer?
     private var overlays: [NSWindow] = []
     private var warning: NSWindow?
+    private var quiet: NSWindow?
+    private var glows: [NSWindow] = []
     private var previousApp: NSRunningApplication?
     private let defaults = UserDefaults.standard
+    // App Nap delays a background app's timers by up to a minute, which drifts the heads-up and the glow.
+    private let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "Break timers fire on time")
 
     init() {
-        defaults.register(defaults: [Key.work: 20.0, Key.rest: 20.0, Key.warn: 60.0, Key.warnSound: "Tink", Key.chime: true, Key.holdInCalls: true])
+        defaults.register(defaults: [Key.work: 20.0, Key.rest: 20.0, Key.warn: 60.0, Key.glow: 8.0, Key.glowWidth: 160.0, Key.warnSound: "Tink", Key.chime: true, Key.holdInCalls: true, Key.video: "quiet"])
         restart()
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
         // Screen off: nobody is looking, so no break runs and none counts toward the streak.
@@ -61,13 +66,13 @@ final class Model: ObservableObject {
         }
     }
 
-    func startBreak() {
+    func startBreak(quiet: Bool = false) {
         stopTimers()
         paused = false
         let length = defaults.double(forKey: Key.rest)
         breakEnds = Date().addingTimeInterval(length)
         timer = fire(after: length) { $0.completeBreak() }
-        showOverlays()
+        if quiet { showQuiet() } else { showOverlays() }
     }
 
     func skipBreak() {
@@ -91,12 +96,16 @@ final class Model: ObservableObject {
             >= -intervalStart.timeIntervalSinceNow
     }
 
-    private var holding: Bool { defaults.bool(forKey: Key.holdInCalls) && (cameraInUse() || micInUse()) }
+    private var holding: Bool {
+        defaults.bool(forKey: Key.holdInCalls) && (cameraInUse() || micInUse())
+            || defaults.string(forKey: Key.video) == "hold" && videoPlaying()
+    }
 
     private func breakDue() {
         if away { return restart() }
-        guard holding else { return startBreak() }
+        guard holding else { return startBreak(quiet: defaults.string(forKey: Key.video) == "quiet" && videoPlaying()) }
         hideWarning()
+        hideGlow()
         waiting = true
         timer = fire(after: 30) { $0.breakDue() }
     }
@@ -108,13 +117,17 @@ final class Model: ObservableObject {
         timer = fire(after: seconds) { $0.breakDue() }
         let warn = defaults.double(forKey: Key.warn)
         if warn > 0 { warnTimer = fire(after: max(0, seconds - warn)) { $0.showWarning() } }
+        let glow = defaults.double(forKey: Key.glow)
+        if glow > 0 { glowTimer = fire(after: max(0, seconds - glow)) { $0.showGlow() } }
     }
 
     private func stopTimers() {
         timer?.invalidate()
         warnTimer?.invalidate()
+        glowTimer?.invalidate()
         waiting = false
         hideWarning()
+        hideGlow()
     }
 
     private func fire(after seconds: TimeInterval, _ action: @escaping (Model) -> Void) -> Timer {
@@ -127,7 +140,7 @@ final class Model: ObservableObject {
 
     private func fade(_ windows: [NSWindow], in fadeIn: Bool) {
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = fadeIn ? 0.6 : 0.5
+            ctx.duration = fadeIn ? 0.35 : 0.4
             windows.forEach { $0.animator().alphaValue = fadeIn ? 1 : 0 }
         }, completionHandler: { if !fadeIn { windows.forEach { $0.close() } } })
     }
@@ -155,8 +168,42 @@ final class Model: ObservableObject {
         fade(overlays, in: true)
     }
 
+    // Screen edges pulse for the last seconds so the break never lands by surprise.
+    private func showGlow() {
+        guard glows.isEmpty, !holding, !away else { return }
+        glows = NSScreen.screens.map { screen in
+            let w = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            w.isReleasedWhenClosed = false
+            w.level = .screenSaver
+            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            w.ignoresMouseEvents = true
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.hasShadow = false
+            w.contentView = NSHostingView(rootView: EdgeGlowView(width: defaults.double(forKey: Key.glowWidth)))
+            w.alphaValue = 0
+            w.orderFrontRegardless()
+            return w
+        }
+        fade(glows, in: true)
+    }
+
+    private func hideGlow() {
+        guard !glows.isEmpty else { return }
+        fade(glows, in: false)
+        glows = []
+    }
+
+    // Over a video: a countdown pill instead of the full overlay. Ends on its own and counts.
+    private func showQuiet() {
+        guard quiet == nil, let ends = breakEnds else { return }
+        quiet = pill(width: 236, QuietBreakView(ends: ends))
+        fade([quiet!], in: true)
+    }
+
     private func closeBreak() {
         breakEnds = nil
+        if let q = quiet { fade([q], in: false); quiet = nil }
         guard !overlays.isEmpty else { return }
         fade(overlays, in: false)
         overlays = []
@@ -164,9 +211,9 @@ final class Model: ObservableObject {
     }
 
     // A small pill under the menu bar that never takes focus or clicks.
-    private func showWarning() {
-        guard warning == nil, !holding, !away, let screen = NSScreen.main else { return }
-        let size = NSSize(width: 184, height: 34), f = screen.visibleFrame
+    private func pill(width: CGFloat, _ view: some View) -> NSPanel {
+        let f = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
+        let size = NSSize(width: width, height: 34)
         let p = NSPanel(contentRect: NSRect(x: f.midX - size.width / 2, y: f.maxY - size.height - 10, width: size.width, height: size.height),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.isReleasedWhenClosed = false
@@ -182,12 +229,18 @@ final class Model: ObservableObject {
             return true
         }
         p.contentView = blur
-        let host = NSHostingView(rootView: WarningView(at: nextBreak))
+        let host = NSHostingView(rootView: view)
         host.frame = blur.bounds
         host.autoresizingMask = [.width, .height]
         blur.addSubview(host)
         p.alphaValue = 0
         p.orderFrontRegardless()
+        return p
+    }
+
+    private func showWarning() {
+        guard warning == nil, !holding, !away else { return }
+        let p = pill(width: 184, WarningView(at: nextBreak))
         warning = p
         defaults.string(forKey: Key.warnSound).flatMap { NSSound(named: $0) }?.play()
         let note = UNMutableNotificationContent() // silent: the heads-up sound above covers it

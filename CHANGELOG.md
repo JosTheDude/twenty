@@ -2,6 +2,18 @@
 
 All notable changes to Twenty are documented here. This project uses [Semantic Versioning](https://semver.org).
 
+## [1.3.0] - 2026-10-23
+
+- While a video plays, breaks become a quiet countdown pill under the menu bar; Settings can hold the break instead, or keep the full overlay
+- `scripts/build.sh install` relaunches the app
+- Timers no longer drift under App Nap, so the heads-up and edge glow land on time
+- Settings regrouped into Breaks, Heads-up and Edge glow; every timing picker has a Custom… entry; version shown under About
+
+## [1.2.0] - 2026-10-23
+
+- Screen edges pulse before a break, 8 seconds by default; lead time and size are configurable in Settings
+- Faster, springier break overlay entrance
+
 ## [1.1.0] - 2026-10-23
 
 - Sound when the heads-up pill appears, configurable in Settings

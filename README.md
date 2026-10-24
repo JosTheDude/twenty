@@ -43,12 +43,15 @@ Open the menu bar icon and choose **Settings…**
 
 | Setting | Key | Default | Range |
 | --- | --- | --- | --- |
-| Break every | `workMinutes` | 20 min | 5–120 min |
-| Break length | `breakSeconds` | 20 sec | 10–300 sec |
-| Heads-up | `warnSeconds` | 60 (1 minute before) | 0 (off), 15, 30, 60, 120 |
+| Break every | `workMinutes` | 20 min | Presets or any custom value, at least 1 min |
+| Break length | `breakSeconds` | 20 sec | Presets or any custom value, at least 5 sec |
+| Heads-up | `warnSeconds` | 60 (1 minute before) | 0 (off) or any seconds |
+| Edge glow | `glowSeconds` | 8 | 0 (off) or any seconds |
+| Edge glow size | `glowWidth` | 160 | Points: 80 (subtle), 160, 320 (bold) |
 | Heads-up sound | `warnSound` | Tink | Any system sound name, or empty for none |
 | Chime when a break ends | `chime` | On | |
 | Hold breaks during calls | `holdInCalls` | On | |
+| While video plays | `whileVideoPlays` | quiet | `break`, `quiet` (countdown pill, no overlay), `hold` |
 | Open at login | | Off | |
 
 ## Deploying to a fleet

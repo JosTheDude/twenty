@@ -1,3 +1,4 @@
+import IOKit.pwr_mgt
 import CoreAudio
 import CoreMediaIO
 
@@ -32,5 +33,15 @@ func micInUse() -> Bool {
     return ids.contains { id in
         var running: UInt32 = 0, s = UInt32(MemoryLayout<UInt32>.size)
         return AudioObjectGetPropertyData(id, &addr, 0, nil, &s, &running) == noErr && running != 0
+    }
+}
+
+// Video players (browsers, VLC, QuickTime) hold a display-sleep assertion while playing.
+func videoPlaying() -> Bool {
+    var raw: Unmanaged<CFDictionary>?
+    guard IOPMCopyAssertionsByProcess(&raw) == kIOReturnSuccess,
+          let byPid = raw?.takeRetainedValue() as? [AnyHashable: [[String: Any]]] else { return false }
+    return byPid.values.joined().contains {
+        $0["AssertionTrueType"] as? String == kIOPMAssertionTypePreventUserIdleDisplaySleep as String
     }
 }

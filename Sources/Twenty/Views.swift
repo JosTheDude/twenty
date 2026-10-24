@@ -47,11 +47,11 @@ struct MenuView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.breakEnds != nil ? "On a break"
                          : model.paused ? "Paused"
-                         : model.waiting ? "Break waits until your call ends"
+                         : model.waiting ? "Break waits until your call or video ends"
                          : "Next break in")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Text(model.waiting ? "In a call" : clock(model.remaining))
+                    Text(model.waiting ? "Busy" : clock(model.remaining))
                         .font(.system(size: 34, weight: .medium, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(model.paused ? .secondary : .primary)
@@ -102,9 +102,12 @@ struct SettingsView: View {
     @AppStorage(Key.work) private var work = 20.0
     @AppStorage(Key.rest) private var rest = 20.0
     @AppStorage(Key.warn) private var warn = 60.0
+    @AppStorage(Key.glow) private var glow = 8.0
+    @AppStorage(Key.glowWidth) private var glowWidth = 160.0
     @AppStorage(Key.warnSound) private var warnSound = "Tink"
     @AppStorage(Key.chime) private var chime = true
     @AppStorage(Key.holdInCalls) private var holdInCalls = true
+    @AppStorage(Key.video) private var video = "quiet"
     @AppStorage(Key.streak) private var streak = 0
     @AppStorage(Key.best) private var best = 0
     @State private var openAtLogin = SMAppService.mainApp.status == .enabled
@@ -114,38 +117,53 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section {
-                LabeledContent("Break every") {
-                    Stepper(value: $work, in: 5...120, step: 5) { Text("\(Int(work)) min").monospacedDigit() }
-                        .disabled(managed(Key.work))
-                }
-                LabeledContent("Break length") {
-                    Stepper(value: $rest, in: 10...300, step: 5) { Text("\(Int(rest)) sec").monospacedDigit() }
-                        .disabled(managed(Key.rest))
-                }
-                Picker("Heads-up", selection: $warn) {
-                    Text("Off").tag(0.0)
-                    Text("15 seconds before").tag(15.0)
-                    Text("30 seconds before").tag(30.0)
-                    Text("1 minute before").tag(60.0)
-                    Text("2 minutes before").tag(120.0)
-                }
-                .disabled(managed(Key.warn))
+            Section("Breaks") {
+                TimePicker("Break every", unit: "min", min: 1, value: $work, disabled: managed(Key.work),
+                           presets: [("10 minutes", 10), ("15 minutes", 15), ("20 minutes", 20), ("30 minutes", 30), ("45 minutes", 45), ("1 hour", 60)])
+                TimePicker("Break length", unit: "sec", min: 5, value: $rest, disabled: managed(Key.rest),
+                           presets: [("10 seconds", 10), ("20 seconds", 20), ("30 seconds", 30), ("1 minute", 60)])
+                Toggle("Chime when a break ends", isOn: $chime)
+                    .disabled(managed(Key.chime))
+            }
+
+            Section("Heads-up") {
+                TimePicker("Heads-up", unit: "sec", min: 0, value: $warn, disabled: managed(Key.warn),
+                           presets: [("Off", 0), ("15 seconds before", 15), ("30 seconds before", 30), ("1 minute before", 60), ("2 minutes before", 120)])
                 Picker("Heads-up sound", selection: $warnSound) {
                     Text("None").tag("")
                     ForEach(["Tink", "Pop", "Ping", "Purr", "Glass", "Hero"], id: \.self) { Text($0).tag($0) }
                 }
                 .disabled(managed(Key.warnSound) || warn == 0)
                 .onChange(of: warnSound) { NSSound(named: warnSound)?.play() }
-                Toggle("Chime when a break ends", isOn: $chime)
-                    .disabled(managed(Key.chime))
+            }
+
+            Section {
+                TimePicker("Edge glow", unit: "sec", min: 0, value: $glow, disabled: managed(Key.glow),
+                           presets: [("Off", 0), ("3 seconds before", 3), ("5 seconds before", 5), ("8 seconds before", 8), ("15 seconds before", 15)])
+                Picker("Edge glow size", selection: $glowWidth) {
+                    Text("Subtle").tag(80.0)
+                    Text("Medium").tag(160.0)
+                    Text("Bold").tag(320.0)
+                }
+                .disabled(managed(Key.glowWidth) || glow == 0)
+            } header: {
+                Text("Edge glow")
+            } footer: {
+                Text("The sides of the screen pulse softly in the last seconds before a break.")
+                    .foregroundStyle(.secondary)
             }
 
             Section {
                 Toggle("Hold breaks during calls", isOn: $holdInCalls)
                     .disabled(managed(Key.holdInCalls))
+                Picker("While video plays", selection: $video) {
+                    Text("Break as usual").tag("break")
+                    Text("Quiet reminder").tag("quiet")
+                    Text("Hold the break").tag("hold")
+                }
+                .disabled(managed(Key.video))
             } footer: {
-                Text("Waits while your camera or microphone is in use, then takes the break once you're done.")
+                Text("Calls wait for your camera or microphone to go quiet. A quiet reminder is a small countdown under the menu bar that never covers the video.")
                     .foregroundStyle(.secondary)
             }
 
@@ -165,12 +183,51 @@ struct SettingsView: View {
                         openAtLogin = SMAppService.mainApp.status == .enabled
                     }
             }
+
+            Section("About") {
+                LabeledContent("Version", value: "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?"))")
+            }
         }
         .formStyle(.grouped)
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
         .onChange(of: work) { model.restart() }
         .onChange(of: warn) { model.restart() }
+        .onChange(of: glow) { model.restart() }
+        .onChange(of: rest) { model.restart() }
+    }
+}
+
+// Preset menu with a Custom… entry that reveals a number field. Values below `min` are clamped.
+struct TimePicker: View {
+    let title: String, unit: String, min: Double, presets: [(String, Double)], disabled: Bool
+    @Binding var value: Double
+    @State private var custom: Bool
+
+    init(_ title: String, unit: String, min: Double, value: Binding<Double>, disabled: Bool, presets: [(String, Double)]) {
+        self.title = title; self.unit = unit; self.min = min; self.presets = presets; self.disabled = disabled
+        _value = value
+        _custom = State(initialValue: !presets.contains { $0.1 == value.wrappedValue })
+    }
+
+    var body: some View {
+        Picker(title, selection: Binding(get: { custom ? -1 : value }, set: { custom = $0 < 0; if $0 >= 0 { value = $0 } })) {
+            ForEach(presets, id: \.1) { Text($0.0).tag($0.1) }
+            Divider()
+            Text("Custom…").tag(-1.0)
+        }
+        .disabled(disabled)
+        if custom {
+            LabeledContent("Custom \(title.lowercased())") {
+                HStack(spacing: 4) {
+                    TextField("", value: Binding(get: { value }, set: { value = Swift.max(min, $0) }), format: .number)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 56)
+                    Text(unit).foregroundStyle(.secondary)
+                }
+            }
+            .disabled(disabled)
+        }
     }
 }
 
@@ -188,11 +245,47 @@ struct WarningView: View {
     }
 }
 
+struct EdgeGlowView: View {
+    let width: Double
+    @State private var bright = false
+
+    var body: some View {
+        HStack {
+            glow
+            Spacer()
+            glow.scaleEffect(x: -1)
+        }
+        .opacity(bright ? 1 : 0.2)
+        .ignoresSafeArea()
+        .onAppear { withAnimation(.easeInOut(duration: 0.75).repeatForever()) { bright = true } }
+    }
+
+    private var glow: some View {
+        LinearGradient(colors: [.white.opacity(0.4), .clear], startPoint: .leading, endPoint: .trailing)
+            .frame(width: width)
+    }
+}
+
+struct QuietBreakView: View {
+    let ends: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            Label("Look away · \(clock(ends.timeIntervalSince(ctx.date)))", systemImage: "eye")
+        }
+        .font(.system(size: 13, weight: .medium))
+        .monospacedDigit()
+        .foregroundStyle(.white.opacity(0.9))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 struct BreakView: View {
     let ends: Date
     let streak: Int
     let skip: () -> Void
     @State private var progress = 1.0
+    @State private var shown = false
 
     var body: some View {
         ZStack {
@@ -236,8 +329,11 @@ struct BreakView: View {
                 }
             }
             .foregroundStyle(.white)
+            .scaleEffect(shown ? 1 : 1.08)
+            .opacity(shown ? 1 : 0)
         }
         .onAppear {
+            withAnimation(.spring(duration: 0.5, bounce: 0.15)) { shown = true }
             withAnimation(.linear(duration: ends.timeIntervalSinceNow)) { progress = 0 }
         }
     }

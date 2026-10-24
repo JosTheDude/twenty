@@ -20,5 +20,6 @@ echo "Built $APP and build/Twenty-$VERSION.zip"
 if [ "$1" = install ]; then
     # Copy rather than symlink: Spotlight skips symlinked apps and SMAppService would register the build/ path
     rm -rf /Applications/Twenty.app && cp -R "$APP" /Applications/
-    echo "Installed to /Applications/Twenty.app"
+    pkill -x Twenty; sleep 1; open /Applications/Twenty.app # pause: open fails while the old process is still quitting
+    echo "Installed and relaunched /Applications/Twenty.app"
 fi

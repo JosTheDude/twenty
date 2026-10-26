@@ -2,7 +2,7 @@ import SwiftUI
 
 // Settings keys. Any of them can be overridden for testing, e.g. `Twenty -workMinutes 0.1`
 enum Key {
-    static let work = "workMinutes", rest = "breakSeconds", warn = "warnSeconds", glow = "glowSeconds", glowWidth = "glowWidth", warnSound = "warnSound"
+    static let work = "workMinutes", rest = "breakSeconds", snooze = "snoozeMinutes", warn = "warnSeconds", glow = "glowSeconds", glowWidth = "glowWidth", warnSound = "warnSound"
     static let chime = "chime", holdInCalls = "holdInCalls", video = "whileVideoPlays", streak = "streak", best = "bestStreak"
 }
 

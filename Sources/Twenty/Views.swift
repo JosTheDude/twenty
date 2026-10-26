@@ -61,9 +61,11 @@ struct MenuView: View {
             HStack(spacing: 8) {
                 Button(model.paused ? "Resume" : "Pause") { model.togglePause() }
                     .frame(maxWidth: .infinity)
+                    .modifier(HoverLift())
                 Button("Break now") { model.startBreak() }
                     .frame(maxWidth: .infinity)
                     .disabled(model.breakEnds != nil)
+                    .modifier(HoverLift())
             }
             .controlSize(.large)
 
@@ -86,11 +88,12 @@ struct MenuView: View {
                     NSApp.activate()
                     openSettings()
                 }
+                .modifier(HoverLift(rest: .secondary))
                 Spacer()
                 Button("Quit") { NSApp.terminate(nil) }
+                    .modifier(HoverLift(rest: .secondary))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
         }
         .padding(16)
         .frame(width: 248)
@@ -101,6 +104,7 @@ struct SettingsView: View {
     @ObservedObject var model: Model
     @AppStorage(Key.work) private var work = 20.0
     @AppStorage(Key.rest) private var rest = 20.0
+    @AppStorage(Key.snooze) private var snooze = 5.0
     @AppStorage(Key.warn) private var warn = 60.0
     @AppStorage(Key.glow) private var glow = 8.0
     @AppStorage(Key.glowWidth) private var glowWidth = 160.0
@@ -122,6 +126,8 @@ struct SettingsView: View {
                            presets: [("10 minutes", 10), ("15 minutes", 15), ("20 minutes", 20), ("30 minutes", 30), ("45 minutes", 45), ("1 hour", 60)])
                 TimePicker("Break length", unit: "sec", min: 5, value: $rest, disabled: managed(Key.rest),
                            presets: [("10 seconds", 10), ("20 seconds", 20), ("30 seconds", 30), ("1 minute", 60)])
+                TimePicker("Snooze for", unit: "min", min: 1, value: $snooze, disabled: managed(Key.snooze),
+                           presets: [("1 minute", 1), ("5 minutes", 5), ("10 minutes", 10), ("15 minutes", 15)])
                 Toggle("Chime when a break ends", isOn: $chime)
                     .disabled(managed(Key.chime))
             }
@@ -172,7 +178,7 @@ struct SettingsView: View {
                 LabeledContent("Best streak", value: "\(best)")
                 Button("Reset Streaks") { streak = 0; best = 0 }
             } footer: {
-                Text("Every finished break adds one. Skipping a break starts over.")
+                Text("Every finished break adds one. Skipping a break starts over; snoozing doesn't.")
                     .foregroundStyle(.secondary)
             }
 
@@ -245,24 +251,70 @@ struct WarningView: View {
     }
 }
 
-struct EdgeGlowView: View {
-    let width: Double
-    @State private var bright = false
+// Core Animation runs these in the render server, so the app does no per-frame work.
+func edgeGlow(right: Bool) -> NSView {
+    let v = NSView()
+    v.wantsLayer = true
+    let g = CAGradientLayer()
+    g.colors = [NSColor.white.withAlphaComponent(0.4).cgColor, NSColor.clear.cgColor]
+    g.startPoint = CGPoint(x: right ? 1 : 0, y: 0.5)
+    g.endPoint = CGPoint(x: right ? 0 : 1, y: 0.5)
+    g.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+    let pulse = CABasicAnimation(keyPath: "opacity")
+    pulse.fromValue = 0.2
+    pulse.toValue = 1
+    pulse.duration = 0.75
+    pulse.autoreverses = true
+    pulse.repeatCount = .infinity
+    pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+    g.add(pulse, forKey: nil)
+    v.layer?.addSublayer(g)
+    return v
+}
 
-    var body: some View {
-        HStack {
-            glow
-            Spacer()
-            glow.scaleEffect(x: -1)
+struct Ring: NSViewRepresentable {
+    let duration: TimeInterval
+
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: 112, height: 112))
+        v.wantsLayer = true
+        let path = CGMutablePath() // from 12 o'clock, clockwise
+        path.addArc(center: CGPoint(x: 56, y: 56), radius: 54.5, startAngle: .pi / 2, endAngle: .pi / 2 - 2 * .pi, clockwise: true)
+        for (alpha, animated) in [(0.12, false), (1.0, true)] {
+            let s = CAShapeLayer()
+            s.path = path
+            s.fillColor = nil
+            s.strokeColor = NSColor.white.withAlphaComponent(alpha).cgColor
+            s.lineWidth = 3
+            s.lineCap = .round
+            if animated {
+                s.strokeEnd = 0
+                let drain = CABasicAnimation(keyPath: "strokeEnd")
+                drain.fromValue = 1
+                drain.toValue = 0
+                drain.duration = duration
+                s.add(drain, forKey: nil)
+            }
+            v.layer?.addSublayer(s)
         }
-        .opacity(bright ? 1 : 0.2)
-        .ignoresSafeArea()
-        .onAppear { withAnimation(.easeInOut(duration: 0.75).repeatForever()) { bright = true } }
+        return v
     }
 
-    private var glow: some View {
-        LinearGradient(colors: [.white.opacity(0.4), .clear], startPoint: .leading, endPoint: .trailing)
-            .frame(width: width)
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+// Turns a button bright and nudges it larger while the pointer is over it.
+struct HoverLift: ViewModifier {
+    var rest: Color? = nil
+    var lit: Color = .primary
+    @State private var on = false
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(on || rest == nil ? lit : rest!)
+            .scaleEffect(on ? 1.06 : 1)
+            .animation(.snappy(duration: 0.15), value: on)
+            .onHover { on = $0 }
     }
 }
 
@@ -283,8 +335,9 @@ struct QuietBreakView: View {
 struct BreakView: View {
     let ends: Date
     let streak: Int
+    let snoozeMinutes: Double
+    let snooze: () -> Void
     let skip: () -> Void
-    @State private var progress = 1.0
     @State private var shown = false
 
     var body: some View {
@@ -294,11 +347,7 @@ struct BreakView: View {
 
             VStack(spacing: 32) {
                 ZStack {
-                    Circle().stroke(.white.opacity(0.12), lineWidth: 3)
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
+                    Ring(duration: ends.timeIntervalSinceNow)
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
                         Text("\(max(0, Int(ends.timeIntervalSince(ctx.date).rounded(.up))))")
                             .font(.system(size: 40, weight: .light, design: .rounded))
@@ -316,11 +365,15 @@ struct BreakView: View {
                 }
 
                 VStack(spacing: 6) {
-                    Button("Skip", action: skip)
-                        .buttonStyle(.plain)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .keyboardShortcut(.cancelAction)
+                    HStack(spacing: 20) {
+                        Button("Snooze \(snoozeMinutes.formatted()) min", action: snooze)
+                            .modifier(HoverLift(rest: .white.opacity(0.45), lit: .white))
+                        Button("Skip", action: skip)
+                            .keyboardShortcut(.cancelAction)
+                            .modifier(HoverLift(rest: .white.opacity(0.45), lit: .white))
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .medium))
                     if streak > 0 {
                         Text("Skipping ends your \(streak)-break streak")
                             .font(.system(size: 11))
@@ -334,7 +387,6 @@ struct BreakView: View {
         }
         .onAppear {
             withAnimation(.spring(duration: 0.5, bounce: 0.15)) { shown = true }
-            withAnimation(.linear(duration: ends.timeIntervalSinceNow)) { progress = 0 }
         }
     }
 }

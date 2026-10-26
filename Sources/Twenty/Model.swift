@@ -23,7 +23,7 @@ final class Model: ObservableObject {
     private let activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "Break timers fire on time")
 
     init() {
-        defaults.register(defaults: [Key.work: 20.0, Key.rest: 20.0, Key.warn: 60.0, Key.glow: 8.0, Key.glowWidth: 160.0, Key.warnSound: "Tink", Key.chime: true, Key.holdInCalls: true, Key.video: "quiet"])
+        defaults.register(defaults: [Key.work: 20.0, Key.rest: 20.0, Key.snooze: 5.0, Key.warn: 60.0, Key.glow: 8.0, Key.glowWidth: 160.0, Key.warnSound: "Tink", Key.chime: true, Key.holdInCalls: true, Key.video: "quiet"])
         restart()
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in }
         // Screen off: nobody is looking, so no break runs and none counts toward the streak.
@@ -73,6 +73,12 @@ final class Model: ObservableObject {
         breakEnds = Date().addingTimeInterval(length)
         timer = fire(after: length) { $0.completeBreak() }
         if quiet { showQuiet() } else { showOverlays() }
+    }
+
+    // Comes back sooner than a full interval and leaves the streak alone.
+    func snoozeBreak() {
+        closeBreak()
+        schedule(in: defaults.double(forKey: Key.snooze) * 60)
     }
 
     func skipBreak() {
@@ -157,7 +163,8 @@ final class Model: ObservableObject {
             w.isOpaque = false
             w.backgroundColor = .clear
             w.appearance = NSAppearance(named: .darkAqua)
-            w.contentView = NSHostingView(rootView: BreakView(ends: ends, streak: streak) { [weak self] in self?.skipBreak() })
+            w.contentView = NSHostingView(rootView: BreakView(ends: ends, streak: streak, snoozeMinutes: defaults.double(forKey: Key.snooze),
+                                                      snooze: { [weak self] in self?.snoozeBreak() }, skip: { [weak self] in self?.skipBreak() }))
             w.setFrame(screen.frame, display: false)
             w.alphaValue = 0
             w.orderFrontRegardless()
@@ -171,8 +178,12 @@ final class Model: ObservableObject {
     // Screen edges pulse for the last seconds so the break never lands by surprise.
     private func showGlow() {
         guard glows.isEmpty, !holding, !away else { return }
-        glows = NSScreen.screens.map { screen in
-            let w = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        let width = defaults.double(forKey: Key.glowWidth)
+        // Two edge strips per screen instead of one full-screen window, so there's less to composite.
+        glows = NSScreen.screens.flatMap { screen in [false, true].map { right in
+            let f = screen.frame
+            let w = NSWindow(contentRect: NSRect(x: right ? f.maxX - width : f.minX, y: f.minY, width: width, height: f.height),
+                             styleMask: .borderless, backing: .buffered, defer: false)
             w.isReleasedWhenClosed = false
             w.level = .screenSaver
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -180,11 +191,11 @@ final class Model: ObservableObject {
             w.isOpaque = false
             w.backgroundColor = .clear
             w.hasShadow = false
-            w.contentView = NSHostingView(rootView: EdgeGlowView(width: defaults.double(forKey: Key.glowWidth)))
+            w.contentView = edgeGlow(right: right)
             w.alphaValue = 0
             w.orderFrontRegardless()
             return w
-        }
+        } }
         fade(glows, in: true)
     }
 

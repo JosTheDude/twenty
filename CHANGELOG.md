@@ -2,6 +2,16 @@
 
 All notable changes to Twenty are documented here. This project uses [Semantic Versioning](https://semver.org).
 
+## [1.5.0] - 2026-10-26
+
+- Buttons in the menu and on the break overlay brighten and grow slightly on hover
+- Edge glow and the break countdown ring animate with Core Animation, so the app uses almost no CPU while they run
+- Edge glow draws in thin strips along each side instead of a full-screen window
+
+## [1.4.0] - 2026-10-26
+
+- Snooze button on the break overlay brings the break back after 5 minutes, configurable in Settings; snoozing keeps your streak
+
 ## [1.3.0] - 2026-10-23
 
 - While a video plays, breaks become a quiet countdown pill under the menu bar; Settings can hold the break instead, or keep the full overlay

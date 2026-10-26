@@ -45,6 +45,7 @@ Open the menu bar icon and choose **Settings…**
 | --- | --- | --- | --- |
 | Break every | `workMinutes` | 20 min | Presets or any custom value, at least 1 min |
 | Break length | `breakSeconds` | 20 sec | Presets or any custom value, at least 5 sec |
+| Snooze for | `snoozeMinutes` | 5 min | Presets or any custom value, at least 1 min |
 | Heads-up | `warnSeconds` | 60 (1 minute before) | 0 (off) or any seconds |
 | Edge glow | `glowSeconds` | 8 | 0 (off) or any seconds |
 | Edge glow size | `glowWidth` | 160 | Points: 80 (subtle), 160, 320 (bold) |
